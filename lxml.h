@@ -26,7 +26,7 @@ XMLNode *XMLNode_new(XMLNode *parent);
 void XMLNode_free(XMLNode *parent);
 
 struct _XMLDocument {
-  char *source;
+  XMLNode *root;
 };
 
 typedef struct _XMLDocument XMLDocument;
@@ -50,17 +50,16 @@ bool XMLDocument_load(XMLDocument *doc, const char *path) {
   fseek(file, 0, SEEK_SET);  // rewind
   printf("The size of file '%s' in bytes is %d\n", path, size);
 
-  doc->source = (char *)malloc(size * sizeof(char) + 1);
-  fread(doc->source, size, 1, file);
+  char *buf = (char *)malloc(size * sizeof(char) + 1);
+  fread(buf, size, 1, file);
   fclose(file);
-  doc->source[size] = '\0';
+  buf[size] = '\0';
 
   return true;
 }
 void XMLDocument_free(XMLDocument *doc) {
   // free the heap allocation
-  free(doc->source);
-  printf("Freed!\n");
+  XMLNode_free(doc->root);
 }
 
 #endif
