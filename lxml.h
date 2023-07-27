@@ -23,7 +23,7 @@ struct _XMLNode {
 typedef struct _XMLNode XMLNode;
 
 XMLNode *XMLNode_new(XMLNode *parent);
-void XMLNode_free(XMLNode *parent);
+void XMLNode_free(XMLNode *node);
 
 struct _XMLDocument {
   XMLNode *root;
@@ -37,6 +37,24 @@ void XMLDocument_free(XMLDocument *doc);
 /*
 implementation
 */
+
+XMLNode *XMLNode_new(XMLNode *parent) {
+  XMLNode *node = (XMLNode *)malloc(sizeof(XMLNode));
+  node->parent = parent;
+  node->tag = NULL;
+  node->inner_text = NULL;
+  return node;
+}
+void XMLNode_free(XMLNode *node) {
+  if (node->tag) free(node->tag);
+  if (node->inner_text) free(node->inner_text);
+  // free(node); !! Danger: we need to free its children before freeing it
+  // if its children exist, then they will be pointing to something that does
+  // not exist seems like a dangling pointer danger
+  // now i realize what manual
+  // memory handling in c means
+}
+
 bool XMLDocument_load(XMLDocument *doc, const char *path) {
   FILE *file = fopen(path, "r");
   if (!file) {
