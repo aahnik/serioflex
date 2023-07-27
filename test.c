@@ -6,6 +6,6 @@ int main() {
   XMLDocument doc;
 
   XMLDocument_load(&doc, "test.xml");
-  printf("\n\n*******\n%s||\n*******\n\n\n", doc.source);
+  printf("%s\n", doc.root->tag);
   XMLDocument_free(&doc);
 }

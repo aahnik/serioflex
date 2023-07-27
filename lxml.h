@@ -73,6 +73,40 @@ bool XMLDocument_load(XMLDocument *doc, const char *path) {
   fclose(file);
   buf[size] = '\0';
 
+  doc->root = XMLNode_new(NULL);
+
+  XMLNode *current_node = NULL;
+
+  char lex[256];
+  int lexi = 0;
+
+  int i = 0;
+  while (buf[i] != '\0') {
+    if (buf[i] == '<') {
+      if (!current_node)
+        current_node = doc->root;
+      else
+        current_node = XMLNode_new(current_node);
+      lexi = 0;
+      i++;
+      while (buf[i] != '>') lex[lexi++] = buf[i++];
+      lex[lexi] = '\0';
+
+      // strcpy(current_node->tag, lex); // this is a terrible mistake
+      current_node->tag = strdup(lex);
+      lexi = 0;
+      i++;
+      continue;
+    }
+    i++;
+
+    // if (buf[i] == '>') {
+    // }
+    // lex[lexi] = buf[i];
+    // i++;
+    // lexi++;
+  }
+
   return true;
 }
 void XMLDocument_free(XMLDocument *doc) {
