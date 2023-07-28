@@ -48,6 +48,7 @@ XMLNode *XMLNode_new(XMLNode *parent) {
 void XMLNode_free(XMLNode *node) {
   if (node->tag) free(node->tag);
   if (node->inner_text) free(node->inner_text);
+  free(node);
   // free(node); !! Danger: we need to free its children before freeing it
   // if its children exist, then they will be pointing to something that does
   // not exist seems like a dangling pointer danger
@@ -79,23 +80,58 @@ bool XMLDocument_load(XMLDocument *doc, const char *path) {
 
   char lex[256];
   int lexi = 0;
-
   int i = 0;
   while (buf[i] != '\0') {
     if (buf[i] == '<') {
+      // inner text
+      lex[lexi] = '\0';
+      if (lexi > 0) {
+        if (!current_node) {
+          fprintf(stderr, "Text outside of document\n");
+          return false;
+        }
+        current_node->inner_text = strdup(lex);
+        printf("inner text: %s\n", current_node->inner_text);
+      }
+
+      // end of node
+      if (buf[i + 1] == '/') {
+        lexi = 0;
+        i += 2;
+
+        while (buf[i] != '>') lex[lexi++] = buf[i++];
+        lex[lexi] = '\0';
+        if (strcmp(current_node->tag, lex)) {
+          fprintf(stderr, "Mismatched tags %s != %s\n", current_node->tag, lex);
+          return false;
+        }
+        current_node = current_node->parent;
+        i++;
+        continue;
+      }
+
+      // set current node
       if (!current_node)
         current_node = doc->root;
       else
         current_node = XMLNode_new(current_node);
-      lexi = 0;
+
+      // get current node tag
+      // lexi = 0;
       i++;
       while (buf[i] != '>') lex[lexi++] = buf[i++];
       lex[lexi] = '\0';
 
       // strcpy(current_node->tag, lex); // this is a terrible mistake
       current_node->tag = strdup(lex);
+
+      // reset lex
       lexi = 0;
+      lex[lexi] = '\0';
       i++;
+      continue;
+    } else {
+      lex[lexi++] = buf[i++];
       continue;
     }
     i++;
