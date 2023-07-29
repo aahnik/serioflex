@@ -34,17 +34,31 @@ typedef struct _XMLAttributeList XMLAttributeList;
 void XMLAttributeList_init(XMLAttributeList *list);
 void XMLAttributeList_add(XMLAttributeList *list, XMLAttribute *attr);
 
+struct _XMLNodeList {
+  int heap_size;
+  int size;
+  struct _XMLNode **data;
+};
+
+typedef struct _XMLNodeList XMLNodeList;
+
+void XMLNodeList_init(XMLNodeList *list);
+
 struct _XMLNode {
   char *tag;
   char *inner_text;
   struct _XMLNode *parent;
   XMLAttributeList attrs;
+  XMLNodeList children;
 };
 
 typedef struct _XMLNode XMLNode;
 
 XMLNode *XMLNode_new(XMLNode *parent);
 void XMLNode_free(XMLNode *node);
+
+void XMLNodeList_add(XMLNodeList *list, XMLNode *node);
+XMLNode *XMLNode_child(XMLNode *parent, int index);
 
 struct _XMLDocument {
   XMLNode *root;
@@ -85,6 +99,10 @@ XMLNode *XMLNode_new(XMLNode *parent) {
   node->tag = NULL;
   node->inner_text = NULL;
   XMLAttributeList_init(&node->attrs);
+  XMLNodeList_init(&node->children);
+
+  if (parent) XMLNodeList_add(&parent->children, node);
+
   return node;
 }
 void XMLNode_free(XMLNode *node) {
@@ -99,6 +117,24 @@ void XMLNode_free(XMLNode *node) {
   // not exist seems like a dangling pointer danger
   // now i realize what manual
   // memory handling in c means
+}
+
+XMLNode *XMLNode_child(XMLNode *parent, int index) {
+  return parent->children.data[index];
+}
+
+void XMLNodeList_init(XMLNodeList *list) {
+  list->heap_size = 1;
+  list->size = 0;
+  list->data = (XMLNode **)malloc(sizeof(XMLNode *) * list->heap_size);
+}
+void XMLNodeList_add(XMLNodeList *list, XMLNode *node) {
+  if (list->size >= list->heap_size) {
+    list->heap_size = list->heap_size * 2;
+    list->data =
+        (XMLNode **)realloc(list->data, sizeof(XMLNode *) * list->heap_size);
+  }
+  list->data[list->size++] = node;
 }
 
 bool XMLDocument_load(XMLDocument *doc, const char *path) {
@@ -121,7 +157,7 @@ bool XMLDocument_load(XMLDocument *doc, const char *path) {
 
   doc->root = XMLNode_new(NULL);
 
-  XMLNode *current_node = NULL;
+  XMLNode *current_node = doc->root;
 
   char lex[256];
   int lexi = 0;
@@ -131,12 +167,20 @@ bool XMLDocument_load(XMLDocument *doc, const char *path) {
       // inner text
       lex[lexi] = '\0';
       if (lexi > 0) {
-        if (!current_node) {
-          fprintf(stderr, "Text outside of document\n");
-          return false;
+        if (!current_node->parent) {
+          fprintf(stderr, ":::ERROR::: Text outside of any node\n");
+          lexi = 0;
+          lex[lexi] = '\0';
+          // return false;
+        } else {
+          if (!current_node->inner_text)
+            current_node->inner_text = strdup(lex);
+          else
+            strcat(current_node->inner_text, (lex));
+          printf(":::DEBUG::: inner text: %s for tag %s\n",
+                 current_node->inner_text, current_node->tag);
+          lexi = 0;
         }
-        current_node->inner_text = strdup(lex);
-        printf("inner text: %s\n", current_node->inner_text);
       }
 
       // end of node
@@ -146,6 +190,13 @@ bool XMLDocument_load(XMLDocument *doc, const char *path) {
 
         while (buf[i] != '>') lex[lexi++] = buf[i++];
         lex[lexi] = '\0';
+        lexi = 0;
+
+        if (!current_node) {
+          fprintf(stderr, "Already at the root\n");
+          return false;
+        }
+
         if (strcmp(current_node->tag, lex)) {
           fprintf(stderr, "Mismatched tags %s != %s\n", current_node->tag, lex);
           return false;
@@ -156,13 +207,11 @@ bool XMLDocument_load(XMLDocument *doc, const char *path) {
       }
 
       // set current node
-      if (!current_node)
-        current_node = doc->root;
-      else
-        current_node = XMLNode_new(current_node);
+
+      current_node = XMLNode_new(current_node);
 
       // start tag
-      // lexi = 0;
+      lexi = 0;
       i++;
       XMLAttribute curr_attr = {0, 0};
       while (buf[i] != '>') {
@@ -221,13 +270,14 @@ bool XMLDocument_load(XMLDocument *doc, const char *path) {
       }
       // reset lex
       lexi = 0;
+      lex[lexi] = '\0';
       i++;
       continue;
     } else {
       lex[lexi++] = buf[i++];
       continue;
     }
-    i++;
+    // i++;
 
     // if (buf[i] == '>') {
     // }
@@ -235,7 +285,10 @@ bool XMLDocument_load(XMLDocument *doc, const char *path) {
     // i++;
     // lexi++;
   }
-
+  lex[lexi] = '\0';
+  if (lexi > 0) {
+    printf(":::ERROR::: Text found at end (outside any node)\n++%s++\n", lex);
+  }
   return true;
 }
 void XMLDocument_free(XMLDocument *doc) {
