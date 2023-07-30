@@ -3,7 +3,7 @@
 
 #include "lxml.h"
 
-void show_node_attrs(XMLNode* node) {
+void show_node_attrs(XMLNode *node) {
   if (node->attrs.size) printf("Attributes for node[%s]:\n", node->tag);
 
   for (int i = 0; i < node->attrs.size; i++) {
@@ -15,11 +15,11 @@ void show_node_attrs(XMLNode* node) {
     printf("No attributes on this node[%s]\n", node->tag);
 }
 
-void show_node(XMLNode* node) {
+void show_node(XMLNode *node) {
   printf("Tag: %s \tInner Text: %s++\n", node->tag, node->inner_text);
 }
 
-void show_children(XMLNode* node) {
+void show_children(XMLNode *node) {
   printf("Children of %s\n", node->tag);
   if (!node->tag) printf("This node is probably the document root\n");
   if (node->children.size == 0) {
@@ -48,20 +48,22 @@ int main() {
   if (XMLDocument_load(&doc, "test.xml")) {
     printf("\n\n*********test.c********\n\n");
     printf("Document root\n");
+    printf("xml declaration: version:%s encoding:%s\n", doc.version,
+           doc.encoding);
     show_node(doc.root);
     show_children(doc.root);
 
     printf("\n===========\n");
-    XMLNode* mynode = XMLNode_child(doc.root, 0);
+    XMLNode *mynode = XMLNode_child(doc.root, 0);
 
     show_node(mynode);
     show_node_attrs(mynode);
     show_children(mynode);
 
-    XMLNode* more_node = XMLNode_child(XMLNode_child(mynode, 0), 0);
+    XMLNode *more_node = XMLNode_child(XMLNode_child(mynode, 0), 0);
     show_node(more_node);
 
-    XMLNode* another_node = XMLNode_child(mynode, 1);
+    XMLNode *another_node = XMLNode_child(mynode, 1);
     show_node(another_node);
     show_node_attrs(another_node);
     XMLDocument_free(&doc);

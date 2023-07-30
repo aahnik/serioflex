@@ -24,8 +24,8 @@ typedef struct _XMLAttribute XMLAttribute;
 void XMLAttribute_free(XMLAttribute *attr);
 
 struct _XMLAttributeList {
-  int heap_size;  // how many elements we can put in
-  int size;       // how many elements we have
+  int heap_size; // how many elements we can put in
+  int size;      // how many elements we have
   XMLAttribute *data;
 };
 
@@ -62,6 +62,8 @@ XMLNode *XMLNode_child(XMLNode *parent, int index);
 
 struct _XMLDocument {
   XMLNode *root;
+  char *version;
+  char *encoding;
 };
 
 typedef struct _XMLDocument XMLDocument;
@@ -78,13 +80,15 @@ bool ends_with(const char *haystack, const char *needle) {
   int n_len = strlen(needle);
 
   for (int i = 0; i < n_len; i++) {
-    if (haystack[h_len - n_len + i] != needle[i]) return false;
+    if (haystack[h_len - n_len + i] != needle[i])
+      return false;
   }
   return true;
 }
 
 void XMLAttribute_free(XMLAttribute *attr) {
-  if (!attr) return;
+  if (!attr)
+    return;
   free(attr->key);
   free(attr->value);
 }
@@ -97,8 +101,8 @@ void XMLAttributeList_init(XMLAttributeList *list) {
 void XMLAttributeList_add(XMLAttributeList *list, XMLAttribute *attr) {
   if (list->size >= list->heap_size) {
     list->heap_size = list->heap_size * 2;
-    list->data = (XMLAttribute *)realloc(
-        list->data, sizeof(XMLAttribute) * list->heap_size);
+    list->data = (XMLAttribute *)realloc(list->data, sizeof(XMLAttribute) *
+                                                         list->heap_size);
   }
   list->data[list->size++] = *attr;
 }
@@ -111,13 +115,16 @@ XMLNode *XMLNode_new(XMLNode *parent) {
   XMLAttributeList_init(&node->attrs);
   XMLNodeList_init(&node->children);
 
-  if (parent) XMLNodeList_add(&parent->children, node);
+  if (parent)
+    XMLNodeList_add(&parent->children, node);
 
   return node;
 }
 void XMLNode_free(XMLNode *node) {
-  if (node->tag) free(node->tag);
-  if (node->inner_text) free(node->inner_text);
+  if (node->tag)
+    free(node->tag);
+  if (node->inner_text)
+    free(node->inner_text);
   for (int i = 0; i < node->attrs.size; i++) {
     XMLAttribute_free(&node->attrs.data[i]);
   }
@@ -133,6 +140,13 @@ XMLNode *XMLNode_child(XMLNode *parent, int index) {
   return parent->children.data[index];
 }
 
+char *XMLNode_attr_value(XMLNode *node, char *key) {
+  for (int i = 0; i < node->attrs.size; i++) {
+    if (!strcmp(node->attrs.data[i].key, key))
+      return node->attrs.data[i].value;
+  }
+  return NULL;
+}
 void XMLNodeList_init(XMLNodeList *list) {
   list->heap_size = 1;
   list->size = 0;
@@ -147,6 +161,60 @@ void XMLNodeList_add(XMLNodeList *list, XMLNode *node) {
   list->data[list->size++] = node;
 }
 
+static bool parse_tag_attrs(char *buf, int *i, char *lex, int *lexi,
+                            XMLNode *current_node) {
+  XMLAttribute curr_attr = {0, 0};
+  while (buf[*i] != '>') {
+    lex[(*lexi)++] = buf[(*i)++];
+
+    // tag name
+    if (buf[*i] == ' ' && !current_node->tag) {
+      lex[*lexi] = '\0';
+      current_node->tag = strdup(lex);
+
+      // reset lex
+      *lexi = 0;
+      lex[*lexi] = '\0';
+      (*i)++;
+      continue;
+    }
+
+    // usually ignores spaces
+    if (lex[*lexi - 1] == ' ') {
+      (*lexi)--;
+      continue;
+    }
+
+    // attribute key
+    if (buf[*i] == '=') {
+      lex[*lexi] = '\0';
+      *lexi = 0;
+      curr_attr.key = strdup(lex);
+      continue;
+    }
+
+    // attribute value
+    if (buf[*i] == '"') {
+      if (!curr_attr.key) {
+        fprintf(stderr, "Value has no key\n");
+        return false;
+      }
+      *lexi = 0;
+      (*i)++;
+      while (buf[*i] != '"')
+        lex[(*lexi)++] = buf[(*i)++];
+
+      lex[*lexi] = '\0';
+      curr_attr.value = strdup(lex);
+      XMLAttributeList_add(&current_node->attrs, &curr_attr);
+      curr_attr.key = NULL, curr_attr.value = NULL; // reset current attr
+      *lexi = 0;
+      (*i)++;
+      continue;
+    }
+  }
+  return true;
+}
 bool XMLDocument_load(XMLDocument *doc, const char *path) {
   FILE *file = fopen(path, "r");
   if (!file) {
@@ -156,8 +224,8 @@ bool XMLDocument_load(XMLDocument *doc, const char *path) {
 
   // move position indicator of file stream to the end of file
   fseek(file, 0, SEEK_END);
-  int size = ftell(file);    // size in no of bytes
-  fseek(file, 0, SEEK_SET);  // rewind
+  int size = ftell(file);   // size in no of bytes
+  fseek(file, 0, SEEK_SET); // rewind
   printf("The size of file '%s' in bytes is %d\n", path, size);
 
   char *buf = (char *)malloc(size * sizeof(char) + 1);
@@ -172,6 +240,7 @@ bool XMLDocument_load(XMLDocument *doc, const char *path) {
   char lex[256];
   int lexi = 0;
   int i = 0;
+
   while (buf[i] != '\0') {
     if (buf[i] == '<') {
       // inner text
@@ -186,7 +255,7 @@ bool XMLDocument_load(XMLDocument *doc, const char *path) {
           if (!current_node->inner_text)
             current_node->inner_text = strdup(lex);
           else
-            strcat(current_node->inner_text, (lex));
+            strcat(current_node->inner_text, lex);
           printf(":::DEBUG::: inner text: %s for tag %s\n",
                  current_node->inner_text, current_node->tag);
           lexi = 0;
@@ -195,7 +264,8 @@ bool XMLDocument_load(XMLDocument *doc, const char *path) {
 
       // handle comments
       if (buf[i + 1] == '!') {
-        while (buf[i] != ' ' && buf[i] != '>') lex[lexi++] = buf[i++];
+        while (buf[i] != ' ' && buf[i] != '>')
+          lex[lexi++] = buf[i++];
         lex[lexi] = '\0';
 
         if (!strcmp(lex, "<!--")) {
@@ -215,12 +285,38 @@ bool XMLDocument_load(XMLDocument *doc, const char *path) {
           continue;
         }
       }
+
+      // declaration tags
+      if (buf[i + 1] == '?') {
+        while (buf[i] != ' ' && buf[i] != '>')
+          lex[lexi++] = buf[i++];
+        lex[lexi] = '\0';
+
+        if (!strcmp(lex, "<?xml")) {
+          printf("probably xml declaration\n");
+          lexi = 0;
+          XMLNode *desc = XMLNode_new(NULL);
+          bool status = parse_tag_attrs(buf, &i, lex, &lexi, desc);
+          printf("Parsed tag attrs lex=(%s) lexi=(%d)\n i=(%d) buf[i]=(%c)",
+                 lex, lexi, i, buf[i]);
+          if (!status)
+            return status;
+          doc->version = XMLNode_attr_value(desc, "version");
+          doc->encoding = XMLNode_attr_value(desc, "encoding");
+          lexi = 0;
+          lex[lexi] = '\0';
+          i++;
+          continue;
+        }
+      }
+
       // end of node
       if (buf[i + 1] == '/') {
         lexi = 0;
         i += 2;
 
-        while (buf[i] != '>') lex[lexi++] = buf[i++];
+        while (buf[i] != '>')
+          lex[lexi++] = buf[i++];
         lex[lexi] = '\0';
         lexi = 0;
 
@@ -239,61 +335,14 @@ bool XMLDocument_load(XMLDocument *doc, const char *path) {
       }
 
       // set current node
-
       current_node = XMLNode_new(current_node);
 
       // start tag
       lexi = 0;
       i++;
-      XMLAttribute curr_attr = {0, 0};
-      while (buf[i] != '>') {
-        lex[lexi++] = buf[i++];
-
-        // tag name
-        if (buf[i] == ' ' && !current_node->tag) {
-          lex[lexi] = '\0';
-          current_node->tag = strdup(lex);
-
-          // reset lex
-          lexi = 0;
-          lex[lexi] = '\0';
-          i++;
-          continue;
-        }
-
-        // usually ignores spaces
-        if (lex[lexi - 1] == ' ') {
-          lexi--;
-          continue;
-        }
-
-        // attribute key
-        if (buf[i] == '=') {
-          lex[lexi] = '\0';
-          lexi = 0;
-          curr_attr.key = strdup(lex);
-          continue;
-        }
-
-        // attribute value
-        if (buf[i] == '"') {
-          if (!curr_attr.key) {
-            fprintf(stderr, "Value has no key\n");
-            return false;
-          }
-          lexi = 0;
-          i++;
-          while (buf[i] != '"') lex[lexi++] = buf[i++];
-
-          lex[lexi] = '\0';
-          curr_attr.value = strdup(lex);
-          XMLAttributeList_add(&current_node->attrs, &curr_attr);
-          curr_attr.key = NULL, curr_attr.value = NULL;  // reset current attr
-          lexi = 0;
-          i++;
-          continue;
-        }
-      }
+      bool status = parse_tag_attrs(buf, &i, lex, &lexi, current_node);
+      if (!status)
+        return status;
 
       lex[lexi] = '\0';
       // valid case when no attributes
@@ -313,18 +362,17 @@ bool XMLDocument_load(XMLDocument *doc, const char *path) {
       lex[lexi] = '\0';
       i++;
       continue;
-    } else {
+    }
+
+    // when buf[i] is not <
+    else {
       lex[lexi++] = buf[i++];
       continue;
     }
-    // i++;
 
-    // if (buf[i] == '>') {
-    // }
-    // lex[lexi] = buf[i];
-    // i++;
-    // lexi++;
-  }
+  } // end of while loop
+
+  // any remaining text
   lex[lexi] = '\0';
   if (lexi > 0) {
     printf(":::ERROR::: Text found at end (outside any node)\n++%s++\n", lex);
