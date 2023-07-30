@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 
 #include "lxml.h"
@@ -30,9 +31,20 @@ void show_children(XMLNode* node) {
   }
 }
 
-int main() {
-  XMLDocument doc;
+void test_ends_with() {
+  assert(ends_with("hello", "hello"));
+  assert(ends_with("hello", "llo"));
+  assert(ends_with("hello", "lo"));
 
+  assert(!ends_with("hello", "cllo"));
+  assert(!ends_with("hello", "llj"));
+
+  printf("✅ ends_with passed\n\n");
+}
+int main() {
+  test_ends_with();
+
+  XMLDocument doc;
   if (XMLDocument_load(&doc, "test.xml")) {
     printf("\n\n*********test.c********\n\n");
     printf("Document root\n");

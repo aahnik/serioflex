@@ -73,6 +73,16 @@ void XMLDocument_free(XMLDocument *doc);
 implementation
 */
 
+bool ends_with(const char *haystack, const char *needle) {
+  int h_len = strlen(haystack);
+  int n_len = strlen(needle);
+
+  for (int i = 0; i < n_len; i++) {
+    if (haystack[h_len - n_len + i] != needle[i]) return false;
+  }
+  return true;
+}
+
 void XMLAttribute_free(XMLAttribute *attr) {
   if (!attr) return;
   free(attr->key);
@@ -183,6 +193,28 @@ bool XMLDocument_load(XMLDocument *doc, const char *path) {
         }
       }
 
+      // handle comments
+      if (buf[i + 1] == '!') {
+        while (buf[i] != ' ' && buf[i] != '>') lex[lexi++] = buf[i++];
+        lex[lexi] = '\0';
+
+        if (!strcmp(lex, "<!--")) {
+          printf("probably showing comment\n");
+
+          lex[lexi] = '\0';
+          printf("%s", lex);
+          while (!ends_with(lex, "-->")) {
+            printf("%c", buf[i]);
+            lex[lexi++] = buf[i++];
+            lex[lexi] = '\0';
+          }
+          lexi = 0;
+          lex[lexi] = '\0';
+          printf("\n");
+          // i++; terrible, hidden bug
+          continue;
+        }
+      }
       // end of node
       if (buf[i + 1] == '/') {
         lexi = 0;
@@ -264,10 +296,18 @@ bool XMLDocument_load(XMLDocument *doc, const char *path) {
       }
 
       lex[lexi] = '\0';
-      // case when no attributes
-      if (!current_node->tag) {
+      // valid case when no attributes
+      if (!current_node->tag && lexi > 0) {
         current_node->tag = strdup(lex);
+      } else if (lexi > 0) {
+        // invalid case of no attributes
+        fprintf(stderr,
+                ":::ERROR::: Probably invalid tag name\ninvalid text (%s) "
+                "inside tag (%s)\n",
+                lex, current_node->tag);
+        return false;
       }
+
       // reset lex
       lexi = 0;
       lex[lexi] = '\0';
